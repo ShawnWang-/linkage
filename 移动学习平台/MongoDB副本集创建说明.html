@@ -1,0 +1,192 @@
+<html lang="en"><head>
+    <meta charset="UTF-8">
+    <title></title>
+<style id="system" type="text/css">h1,h2,h3,h4,h5,h6,p,blockquote {    margin: 0;    padding: 0;}body {    font-family: "Helvetica Neue", Helvetica, "Hiragino Sans GB", Arial, sans-serif;    font-size: 13px;    line-height: 18px;    color: #737373;    margin: 10px 13px 10px 13px;}a {    color: #0069d6;}a:hover {    color: #0050a3;    text-decoration: none;}a img {    border: none;}p {    margin-bottom: 9px;}h1,h2,h3,h4,h5,h6 {    color: #404040;    line-height: 36px;}h1 {    margin-bottom: 18px;    font-size: 30px;}h2 {    font-size: 24px;}h3 {    font-size: 18px;}h4 {    font-size: 16px;}h5 {    font-size: 14px;}h6 {    font-size: 13px;}hr {    margin: 0 0 19px;    border: 0;    border-bottom: 1px solid #ccc;}blockquote {    padding: 13px 13px 21px 15px;    margin-bottom: 18px;    font-family:georgia,serif;    font-style: italic;}blockquote:before {    content:"C";    font-size:40px;    margin-left:-10px;    font-family:georgia,serif;    color:#eee;}blockquote p {    font-size: 14px;    font-weight: 300;    line-height: 18px;    margin-bottom: 0;    font-style: italic;}code, pre {    font-family: Monaco, Andale Mono, Courier New, monospace;}code {    background-color: #fee9cc;    color: rgba(0, 0, 0, 0.75);    padding: 1px 3px;    font-size: 12px;    -webkit-border-radius: 3px;    -moz-border-radius: 3px;    border-radius: 3px;}pre {    display: block;    padding: 14px;    margin: 0 0 18px;    line-height: 16px;    font-size: 11px;    border: 1px solid #d9d9d9;    white-space: pre-wrap;    word-wrap: break-word;}pre code {    background-color: #fff;    color:#737373;    font-size: 11px;    padding: 0;}@media screen and (min-width: 768px) {    body {        width: 748px;        margin:10px auto;    }}</style><style id="custom" type="text/css"></style></head>
+<body marginheight="0"><h1>MongoDB副本集设置指南</h1>
+<h2>概念</h2>
+<h3>主从</h3>
+<p>主从机制是传统数据库的备份机制, 主数据库只能允许一个, 从数据可以有多个. 从而实现数据备份和读写分离的功能.
+
+</p>
+<h3>副本集</h3>
+<p>通俗的讲就是用多台机器进行同一数据的异步同步，从而使多台机器拥有同一数据的多个副本，并且当主库当掉时在不需要用户干预的情况下自动切换其他备份服务器做主库。而且还可以利用副本服务器做只读服务器，实现读写分离，提高负载。
+
+</p>
+<p>副本集是MongoDB官方推荐的数据备份机制, 具有传统的主从机制的所有特点, 并能很好的扩展. 在通常情况下, 优先采用此机制.
+
+</p>
+<h3>分片</h3>
+<p>分片是MongoDB更高级别机制.通常在数据量相当大, 一台机器无法容纳所有数据的情况下的数据切分机制.
+
+</p>
+<p>利用分片, 可以把完整数据按照规则切分为几块, 然后每块数据采用副本集来备份和分担读写压力, 从而共同组成数据集群.
+
+
+</p>
+<h2>主从和副本集异同</h2>
+<p>主从和副本集都利用了MongoDB自带的oplog机制, 基本原理都是一样的.
+
+</p>
+<p>但是, 副本集具有更高级别的特性, 不但可以实现读写分离, 还可以在主数据库挂掉的情况下,自动的切换主数据库. 而且可以在挂掉的数据库恢复后, 自动恢复整个集群, 而不需要人为手工恢复.从而保证了更高的可靠性.
+
+</p>
+<h2>安装</h2>
+<p>MongoDB官方具有详细的安装文档, 详见<a href="http://docs.mongodb.org/manual/installation/">Linux 安装文档</a>
+
+</p>
+<p><strong>其他说明</strong>:
+
+</p>
+<ol>
+<li><p>MongoDB会充分使用机器的内存, 同时也易于受内存的波动而影响性能.</p>
+</li>
+<li><p>MongoDB虽然支持32位机器上运行, 但是容纳的数据量十分有限, 生产使用只允许64位.</p>
+</li>
+<li><p>MongoDB在默认安装情况下, 注意以下目录:</p>
+<p> /etc/mongod.conf                ----配置文件
+ /var/log/mongo/mongod.log       ----日志文件
+ /var/lib/mongo/                 ----数据存放文件夹</p>
+</li>
+<li><p>MongoDB安装完成后, 通常会自动如下命令:</p>
+<p> mongo                           ----MongoDB操作客户端
+ mongod                          ----MongoDB服务端
+ mongodump                       ----MongoDB备份命令
+ mongorestore                    ----MongoDB恢复备份命令</p>
+</li>
+<li><p>MongoDB启动后默认启用<code>27017</code>端口, 通常为了监控MongoDB, 会开启<code>27018</code>端口</p>
+</li>
+<li><p>MongoDB安装完成后, 默认不需要密码就可以访问, 如果想设置密码, 必须启动后手工通过命令设置</p>
+</li>
+</ol>
+<h2>启动</h2>
+<p>默认安装完成后, 可以通过如下方式启动:
+
+</p>
+<pre><code>service mongod start</code></pre>
+<p>如果启动失败, 需要检查如下事项:
+
+</p>
+<ol>
+<li><p>数据库存放文件夹是否有<code>mongod.lock</code>文件, 如果存在, 删除</p>
+</li>
+<li><p>数据库存放文件夹必须存在, 不存在则需提前建好</p>
+</li>
+<li><p>数据库存放文件夹及其子文件夹必须保证权限为<code>mongod:mongod</code>, 可以通过如下命令赋予权限:</p>
+<p> chown -R mongod:mongod /var/lib/mongo</p>
+</li>
+</ol>
+<p>如果想在同一台机器上启动多个MongoDB, 可以运行如下命令:
+
+</p>
+<pre><code>mongod -f [配置文件地址]</code></pre>
+<p>同时, 启动前保证每个实例都有一个配置文件, 并需要注意一下事项:
+
+</p>
+<ol>
+<li><p>MongoDB必须保证端口不冲突, 配置文件设置:</p>
+<p> port = 27017</p>
+</li>
+<li><p>MongoDB必须保证日志记录文件不一致, 配置文件设置:</p>
+<p> logpath = /var/log/mongo/mongod.log</p>
+</li>
+<li><p>MongoDB必须保证数据库数据存放目录不一样, 并启动前创建好, 配置文件设置:</p>
+<p> dbpath = /var/lib/mongo/</p>
+</li>
+<li><p>如果需要创建副本集, 必须设置同样的副本集名称, 配置文件设置:</p>
+<p> replSet = replSet0</p>
+</li>
+</ol>
+<h2>关停</h2>
+<p>通常情况下, 可以通过如下命令停止MongoDB:
+
+</p>
+<pre><code>service mongod stop</code></pre>
+<p>如果只需要暂停某个mongoDB实例, 可以通过端口找到进程名, 然后杀掉即可, 例如:
+
+</p>
+<pre><code>netstat -ano | grep 27017 | awk '{print $2}' | xargs kill -9</code></pre>
+<h2>副本集设置</h2>
+<h3>配置文件</h3>
+<p>可以单台机器成一个副本集, 也可以多台机器组成副本集, 通常情况为两台及以上.
+
+</p>
+<p>为了保证副本集在主库挂掉的情况下自动切换主库, 还需要单独启动一个监控实例.
+
+</p>
+<p>各个数据库实例之间, 其配置只需要关注一点, 及<code>replSet</code>配置参数必须一样, 且必须设置.
+
+</p>
+<h3>启动副本集</h3>
+<p>各个数据库实例启动后, 还需要运行命令初始化副本集, 否则及无法写也无法读.
+
+</p>
+<p>初始化副本集可以再任何一台实例机器上运行如下命令:
+
+</p>
+<pre><code>mongo</code></pre>
+<p>运行命令启动shell后, 通过如下操作(都是普通的javascript命令)初始化副本集:
+    /<strong>
+    例如: configs = {
+        "_id": "replSet0",
+        "members": [
+            {
+                "_id": 0,
+                "host": "192.168.1.1:27017", 
+                "priority": 1.5
+            },
+            {
+                "_id": 1,
+                "host": "192.168.1.2:27017", 
+                "priority": 1
+            },
+            {
+                "_id": 2,
+                "host": "192.168.1.3:27017", 
+                "arbiterOnly": true
+            }
+        ]
+    }
+    </strong>/
+    configs = {"_id": <code>副本集名称</code>, "members": [{"_id": <code>机器编号, 按照顺序填写0,1,2</code>, "host": <code>机器ip:port</code>}]}
+
+
+</p>
+<pre><code>rs.initiate(configs)</code></pre>
+<p>如果运行命令后没有报错, 及初始化成功, 这时候可以通过如下命令查看副本集状态:
+
+</p>
+<pre><code>rs.status()</code></pre>
+<p>命令运行完成后, 即可以看到哪台是主, 哪台是从, 如果想指定某台机器优先成为主, 可以调高<code>priority</code>, 默认皆为<code>1</code>.
+
+</p>
+<p>如果在初始化时没有指定监控实例, 可以在主数据库上之行如下命令添加:
+
+</p>
+<pre><code>rs.addArb("监控数据库ip:port")</code></pre>
+<p>如果想把某台机器从副本集中摘出来, 可以在任何一台副本集所在机器上运行如下命令:
+
+</p>
+<pre><code>rs.remove("需要摘除的数据库ip:port")</code></pre>
+<p>如果想在副本集中增加一台数据库, 可以运行如下命令:
+
+</p>
+<pre><code>rs.add("需要增加的数据库ip:port")</code></pre>
+<p>如果想重新配置数据库, 可以主数据库上之行如下命令:
+
+</p>
+<pre><code>//获取老配置
+configs = rs.conf()
+
+//更改配置
+configs["members"][0]["host"] = "192.168.23.1:27017"
+
+//重新初始化配置
+rs.reconfig(configs)</code></pre>
+<p><strong>注意事项</strong>:
+
+</p>
+<ol>
+<li>数据库的ip不允许填<code>127.0.0.1</code></li>
+</ol>
+<p>Edit By <a href="http://mahua.jser.me">MaHua</a></p>
+</body></html>
